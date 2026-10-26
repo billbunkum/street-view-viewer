@@ -1,12 +1,3 @@
-# DEPENDENCIES
-# Be sure to run the following `install` first:
-'''
-$ pip install pandas openpyxl keyboard
-'''
-# NOTES:
-# "Vibe Coded" with Gemini
-# Script works best with Windows
-
 """
 Script Name: Street View Global Tab Viewer
 Description: Reads a CSV or Excel file containing spatial data, prompts for 
@@ -14,9 +5,9 @@ Description: Reads a CSV or Excel file containing spatial data, prompts for
              Street View using global hotkeys.
 
 Global Controls:
-  - [Ctrl + Shift + F] : Advance to the next row / location (works globally, 
-                         even when the terminal is not active/highlighted).
-  - [Ctrl + Shift + Q] : Quit / exit the script at any time.
+  - [Ctrl + Shift + F] : Advance to the next location.
+  - [Ctrl + Shift + J] : Jump to a specific file row (prompts in terminal).
+  - [Ctrl + Shift + Q] : Quit the script.
 
 Operating System Notes:
   - Windows: Works immediately.
@@ -37,8 +28,6 @@ def open_street_view():
     
     # Prompt the user for the file path explicitly
     file_path = input("Enter the path to your .csv or .xlsx file (or drag & drop it here): ").strip()
-    
-    # Remove surrounding quotes if the file path was drag-and-dropped
     file_path = file_path.strip('"\'')
 
     if not os.path.exists(file_path):
@@ -58,7 +47,6 @@ def open_street_view():
         print(f"\n[Error] Failed to read file: {e}")
         return
 
-    # Verify latitude and longitude columns exist explicitly
     if 'Latitude' not in df.columns or 'Longitude' not in df.columns:
         print("\n[Error] Missing required columns. The file must contain 'Latitude' and 'Longitude' columns.")
         return
@@ -67,40 +55,68 @@ def open_street_view():
     print("-" * 60)
     print("ACTIVE CONTROLS (Global):")
     print("  -> Press [Ctrl + Shift + F] to go to the next location")
+    print("  -> Press [Ctrl + Shift + J] to jump to a specific file row")
     print("  -> Press [Ctrl + Shift + Q] to quit the script")
     print("-" * 60 + "\n")
 
-    for index, row in df.iterrows():
+    idx = 0
+    while idx < len(df):
+        row = df.iloc[idx]
         lat = row['Latitude']
         lon = row['Longitude']
         road = row.get('Road_name', 'Unknown Road')
-        row_num = row.get('Row', index + 1)
         
-        # Official Google Maps Street View panorama URL format
+        # File row compensation: index 0 is Excel/CSV row 2
+        file_row = idx + 2
+        
         url = f"https://www.google.com/maps/@?api=1&map_action=pano&viewpoint={lat},{lon}"
         
-        print(f"[{index + 1}/{len(df)}] Opening -> Row: {row_num} | Road: {road} | Lat: {lat}, Lon: {lon}")
-        
-        # Open location in a new browser tab
+        print(f"[{idx + 1}/{len(df)}] Opening -> File Row: {file_row} | Road: {road} | Lat: {lat}, Lon: {lon}")
         webbrowser.open_new_tab(url)
         
-        # Terminate loop if it is the final row
-        if index == len(df) - 1:
+        if idx == len(df) - 1:
             print("\n[Complete] Reached the end of the file.")
             break
             
-        print("Waiting for global hotkey [Ctrl + Shift + F]...")
+        print("Waiting for hotkey ([Ctrl+Shift+F] Next | [Ctrl+Shift+J] Jump | [Ctrl+Shift+Q] Quit)...")
         
-        # Block execution globally until one of the designated hotkeys is triggered
+        action = None
         while True:
             if keyboard.is_pressed('ctrl+shift+f'):
-                # Debounce: wait until the key combination is released to prevent multi-triggering
                 while keyboard.is_pressed('ctrl+shift+f'):
                     pass
+                action = 'next'
+                break
+            elif keyboard.is_pressed('ctrl+shift+j'):
+                while keyboard.is_pressed('ctrl+shift+j'):
+                    pass
+                action = 'jump'
                 break
             elif keyboard.is_pressed('ctrl+shift+q'):
-                print("\n[Exited] Script terminated by user.")
-                return
+                while keyboard.is_pressed('ctrl+shift+q'):
+                    pass
+                action = 'quit'
+                break
+        
+        if action == 'quit':
+            print("\n[Exited] Script terminated by user.")
+            return
+        elif action == 'jump':
+            # Prompt user in terminal for target file row
+            target_input = input(f"\nEnter target file row number to jump to (2 to {len(df) + 1}): ").strip()
+            try:
+                target_row = int(target_input)
+                new_idx = target_row - 2
+                if 0 <= new_idx < len(df):
+                    idx = new_idx
+                    print(f"[Jump] Resuming from File Row {target_row} (Index {idx}).\n")
+                    continue
+                else:
+                    print(f"[Error] Row {target_row} is out of bounds. Valid range is 2 to {len(df) + 1}. Continuing from current row.\n")
+            except ValueError:
+                print("[Error] Invalid input. Please enter a valid integer. Continuing from current row.\n")
+        
+        idx += 1
 
 if __name__ == "__main__":
     open_street_view()
